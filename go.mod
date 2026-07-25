@@ -3,7 +3,7 @@ module github.com/gomatic/go-envelope
 go 1.26.4
 
 require (
-	github.com/gomatic/go-error v0.3.4
+	github.com/gomatic/go-error v0.3.7
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.54.0
 )
