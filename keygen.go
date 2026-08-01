@@ -66,7 +66,7 @@ func GenerateKeyPair(passphrase Passphrase) (*KeyBundle, error) {
 	}
 
 	pubPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "ED25519 PUBLIC KEY",
+		Type:  PublicKeyPEMType,
 		Bytes: pub,
 	})
 

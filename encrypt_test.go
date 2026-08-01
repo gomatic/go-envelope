@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"io"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -212,4 +213,41 @@ func TestEncrypt_GCMConstructionFails(t *testing.T) {
 		_, err := EncryptToRecipient(Plaintext("x"), pubPEM, "fp")
 		assert.ErrorIs(t, err, ErrCreateGCM)
 	})
+}
+
+// TestGcmFromBlockIsCipherNewGCMInProduction names gcmFromBlock's claim. Like
+// newGCM it is a variable only so a test can force the GCM-construction error
+// path, which AES can never trigger. If production ever read a substituted
+// constructor, every envelope would be sealed with whatever AEAD that returned
+// — and the ciphertext would still round-trip through this package's own
+// decrypt, so no functional test would notice.
+func TestGcmFromBlockIsCipherNewGCMInProduction(t *testing.T) {
+	assert.Equal(t,
+		reflect.ValueOf(cipher.NewGCM).Pointer(),
+		reflect.ValueOf(gcmFromBlock).Pointer(),
+		"gcmFromBlock must be cipher.NewGCM itself in production")
+	assert.Equal(t,
+		reflect.ValueOf(realNewGCM).Pointer(),
+		reflect.ValueOf(newGCM).Pointer(),
+		"newGCM must be the real AES-256-GCM constructor in production")
+}
+
+// TestRealNewGCMProducesAES256GCM pins what the production constructor actually
+// builds. AES-256 is a key-length property, and GCM is the only mode here that
+// authenticates — a construction that silently produced AES-128 or an
+// unauthenticated mode would encrypt and decrypt perfectly while providing far
+// less than the package claims.
+func TestRealNewGCMProducesAES256GCM(t *testing.T) {
+	key := make([]byte, 32)
+	aead, err := realNewGCM(key)
+
+	require.NoError(t, err)
+	assert.Equal(t, 12, aead.NonceSize(), "GCM's standard nonce size")
+	assert.Equal(t, 16, aead.Overhead(), "GCM's 128-bit authentication tag")
+
+	_, err = realNewGCM(make([]byte, 16))
+	assert.NoError(t, err, "the constructor itself accepts any valid AES size")
+
+	_, err = realNewGCM(make([]byte, 7))
+	assert.ErrorIs(t, err, ErrCreateAESCipher, "an invalid key length is a matchable failure")
 }
